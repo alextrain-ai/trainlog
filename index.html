@@ -185,7 +185,7 @@ const NUTRITION = { kcal:2300, protein:"160–175 g", fat:"70–80 g", carbs:"re
 /* ================= State ================= */
 const CACHE="trainlog.v2.cache", AUTH="trainlog.v2.auth";
 let state = { program:[], logs:[], weights:[], draft:null, pin:null };
-let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, syncStatus="";
+let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, logDate=null, syncStatus="";
 try{ const c=JSON.parse(localStorage.getItem(CACHE)); if(c) state={...state,...c}; }catch(e){}
 function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft})); }
 
@@ -313,13 +313,20 @@ async function submitPin(first){
 /* ================= Today ================= */
 function renderToday(){
   if(state.draft){renderActive();return;}
-  const doneToday=new Set(state.logs.filter(l=>l.date===todayISO()).map(l=>l.session_key));
-  let h=`<div class="label" style="margin-bottom:8px">Pick today's session</div><div class="sessgrid">`;
+  const day=logDate||todayISO(), isToday=day===todayISO();
+  const doneToday=new Set(state.logs.filter(l=>l.date===day).map(l=>l.session_key));
+  let h=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
+   <div class="label">Pick ${isToday?"today's":"the"} session</div>
+   <div class="row"><input type="date" id="logDate" value="${day}" max="${todayISO()}"
+     onchange="logDate=this.value===todayISO()?null:this.value;render()" style="max-width:150px">
+   ${isToday?"":`<button class="btn ghost small" onclick="logDate=null;render()">Today</button>`}</div></div>
+   ${isToday?"":`<div class="small" style="margin-bottom:8px">Logging a past workout for <strong>${fmtDate(day)}</strong>.</div>`}
+   <div class="sessgrid">`;
   for(const key of SESSION_ORDER){
     const last=[...state.logs].filter(l=>l.session_key===key).sort((a,b)=>a.date<b.date?-1:1).slice(-1)[0];
     h+=`<button class="sesscard ${doneToday.has(key)?"done":""}" onclick="startSession('${key}')">
      <span class="sname">${SESSIONS[key]}</span><span class="smeta">${sessionEx(key).length} exercises</span>
-     <span class="smeta">${doneToday.has(key)?'<span class="tag good">Done today</span>':last?"Last: "+fmtDate(last.date):"Never logged"}</span></button>`;
+     <span class="smeta">${doneToday.has(key)?`<span class="tag good">Done ${isToday?"today":fmtDate(day)}</span>`:last?"Last: "+fmtDate(last.date):"Never logged"}</span></button>`;
   }
   h+=`</div><div class="divider"></div>`;
   const wAvg=weekAvg();
@@ -341,7 +348,7 @@ function logWeight(){
 }
 function startSession(key){
   const exs=sessionEx(key);
-  state.draft={session_key:key,date:todayISO(),notes:"",order:exs.map(e=>e.id),
+  state.draft={session_key:key,date:logDate||todayISO(),notes:"",order:exs.map(e=>e.id),
    entries:Object.fromEntries(exs.map(ex=>{const t=target(ex);
     return [ex.id,Array.from({length:ex.sets},()=>({w:t.w??"",r:"",rir:"",done:false}))];}))};
   cache(); saveDraft(); render();
@@ -350,7 +357,9 @@ function draftExs(){ return state.draft.order.map(exById).filter(Boolean); }
 function renderActive(){
   const d=state.draft;
   let h=`<div class="row" style="justify-content:space-between;margin-bottom:10px">
-   <div><h2 style="margin:0">${SESSIONS[d.session_key]}</h2><div class="small">${SESSION_NOTE[d.session_key]||""}</div></div>
+   <div><h2 style="margin:0">${SESSIONS[d.session_key]}</h2><div class="small">${SESSION_NOTE[d.session_key]||""}</div>
+    <input type="date" value="${d.date}" max="${todayISO()}" style="margin-top:4px;max-width:150px"
+     onchange="state.draft.date=this.value||todayISO();saveDraft()"></div>
    <div class="row"><button class="btn small ${reorderMode?"primary":""}" onclick="reorderMode=!reorderMode;render()">↕</button>
    <button class="btn ghost small" onclick="discardDraft()">Discard</button></div></div>`;
   draftExs().forEach((ex,xi)=>{
@@ -425,7 +434,7 @@ function moveDraft(i,dir){const o=state.draft.order;const j=i+dir;if(j<0||j>=o.l
   [o[i],o[j]]=[o[j],o[i]];saveDraft();render();}
 function removeDraftEx(id){if(!confirm("Remove this exercise from today's session?"))return;
   state.draft.order=state.draft.order.filter(x=>x!==id);delete state.draft.entries[id];saveDraft();render();}
-function discardDraft(){if(confirm("Discard this session?")){state.draft=null;cache();
+function discardDraft(){if(confirm("Discard this session?")){state.draft=null;logDate=null;cache();
   push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"draft",value:null}});render();}}
 function finishSession(){
   const d=state.draft,entries={};let any=false;
@@ -434,7 +443,7 @@ function finishSession(){
    if(sets.length){entries[id]=sets;any=true;}}
   if(!any){toast("Log at least one set first");return;}
   const log={id:Date.now(),date:d.date,session_key:d.session_key,notes:d.notes,entries,ex_order:d.order};
-  state.logs.push(log); state.draft=null; cache();
+  state.logs.push(log); state.draft=null; logDate=null; cache();
   push({path:"/logs",method:"POST",body:log});
   push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"draft",value:null}});
   toast("Session saved 💪"); go("history");
