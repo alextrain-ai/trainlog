@@ -283,7 +283,7 @@ function renderShell(){
      <button id="tab-program" onclick="go('program')"><span class="ic">◎</span>Program</button></nav>
     <div class="timer" id="timerEl" hidden></div>`);
 }
-function go(t){tab=t;editingProgram=false;editingEx=null;addingTo=null;reorderMode=false;render();}
+function go(t){tab=t;editingProgram=false;editingEx=null;addingTo=null;reorderMode=false;render();window.scrollTo(0,0);}
 function render(){
   $("hdrDate").textContent=fmtDate(todayISO());
   const el=$("syncEl"); el.textContent=syncStatus;
@@ -291,7 +291,6 @@ function render(){
   $("tabsEl").hidden=false;
   ["today","history","program"].forEach(t=>$("tab-"+t).classList.toggle("on",t===tab));
   if(tab==="today")renderToday(); else if(tab==="history")renderHistory(); else renderProgram();
-  window.scrollTo(0,0);
 }
 function renderPin(){
   const first=!state.pin;
@@ -453,7 +452,7 @@ function finishSession(){
 function addExerciseForm(sessionKey,toDraft,swapId){
   const sw=swapId?`'${swapId}'`:"null", verb=swapId?"Swap":"Add";
   const inSession=new Set(toDraft?state.draft.order:sessionEx(sessionKey).map(e=>e.id));
-  const opts=state.program.filter(e=>!inSession.has(e.id)&&e.active)
+  const opts=state.program.filter(e=>!inSession.has(e.id)&&(e.active||(e.is_custom&&toDraft)))
     .map(e=>`<option value="${e.id}">${esc(e.name)} (${SESSIONS[e.session_key]||e.session_key})</option>`).join("");
   return `<div class="editform">
    ${opts?`<div><label>From program</label><div class="row">
