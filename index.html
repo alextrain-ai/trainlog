@@ -4,22 +4,15 @@
 <meta charset="utf-8">
 <title>TrainLog</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0F1317">
+<meta name="theme-color" content="#0A0C0E">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏋️</text></svg>">
 <style>
 :root{
-  --bg:#F4F5F7; --surface:#FFFFFF; --ink:#15191D; --muted:#5B6570; --line:#E2E6EA;
-  --accent:#C77E14; --accent-soft:#F7EAD3; --accent-ink:#FFFFFF;
-  --good:#2E7D4F; --good-soft:#E3F1E8; --bad:#B3403A; --bad-soft:#F6E5E3;
-  --chip:#EDF0F3; --input:#F6F8FA;
-}
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0F1317; --surface:#171C22; --ink:#EDF1F4; --muted:#8B96A2; --line:#242B33;
-    --accent:#F2A33C; --accent-soft:#2A2115; --accent-ink:#1A1205;
-    --good:#4CC38A; --good-soft:#15291F; --bad:#E5645C; --bad-soft:#2E1A18;
-    --chip:#1F262E; --input:#10151A;
-  }
+  color-scheme:dark;
+  --bg:#0A0C0E; --surface:#13161A; --ink:#F2F5F2; --muted:#8B948E; --line:#22282B;
+  --accent:#33E870; --accent-soft:#0E2416; --accent-ink:#041308;
+  --good:#33E870; --good-soft:#0E2416; --bad:#FF5A4E; --bad-soft:#2B1412;
+  --chip:#1B2024; --input:#0E1113;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -31,36 +24,37 @@ body{
 }
 .wrap{max-width:560px;margin:0 auto;padding:16px 16px 8px}
 header.app{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
-.brand{font-weight:800;font-size:22px;letter-spacing:-0.02em}
-.brand em{font-style:normal;color:var(--accent)}
+.brand{font-weight:900;font-size:20px;letter-spacing:.02em;text-transform:uppercase}
+.brand em{font-style:normal;background:var(--accent);color:var(--accent-ink);padding:1px 6px 2px;border-radius:5px;margin-left:3px}
 .date{font-size:13px;color:var(--muted)}
 .sync{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em}
 .sync.err{color:var(--bad)}
 .label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
-h2{font-size:17px;font-weight:800;letter-spacing:-0.01em;margin:0 0 8px;text-wrap:balance}
+h2{font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px;text-wrap:balance}
 .num{font-variant-numeric:tabular-nums}
 .row{display:flex;gap:8px;align-items:center}
 .grow{flex:1}
 button{font:inherit;cursor:pointer;border:none;border-radius:10px;color:var(--ink);background:var(--chip)}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn{padding:12px 16px;font-weight:700;font-size:15px}
-.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);font-weight:900;text-transform:uppercase;letter-spacing:.05em;box-shadow:0 0 18px rgba(51,232,112,.22)}
 .btn.ghost{background:transparent;color:var(--muted);font-weight:600}
 .btn.small{padding:8px 12px;font-size:13px;border-radius:8px}
 .btn:active{transform:scale(.98)}
 .sessgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .sesscard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left;display:flex;flex-direction:column;gap:4px;min-height:92px}
-.sesscard .sname{font-weight:800;font-size:16px}
+.sesscard .sname{font-weight:900;font-size:14.5px;text-transform:uppercase;letter-spacing:.03em}
 .sesscard .smeta{font-size:12.5px;color:var(--muted)}
 .sesscard.done{border-color:var(--good)}
 .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;letter-spacing:.04em}
 .tag.good{background:var(--good-soft);color:var(--good)}
 .tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.pr{background:var(--accent);color:var(--accent-ink);font-weight:800}
 .excard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 .excard.collapsed .exbody{display:none}
 .exhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px}
-.exname{font-weight:800;font-size:16px;letter-spacing:-0.01em}
+.exname{font-weight:900;font-size:15.5px;letter-spacing:0}
 .exscheme{font-size:12.5px;color:var(--muted);margin-top:2px}
 .exctl{display:flex;gap:4px;flex-shrink:0}
 .exctl button{padding:6px 9px;font-size:13px;border-radius:8px;color:var(--muted);background:var(--chip)}
@@ -109,7 +103,7 @@ ul.tight li{margin-bottom:4px}
 .finishbar .btn{flex:1;padding:14px}
 .timer{position:fixed;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:16px;padding:12px 16px;border-radius:99px;z-index:30;font-variant-numeric:tabular-nums;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .editform{background:var(--input);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;display:flex;flex-direction:column;gap:8px}
-.editform .fr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:6px}
+.editform .fr{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .editform label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:block;margin-bottom:2px}
 .pinwrap{max-width:320px;margin:22vh auto 0;padding:0 20px;text-align:center}
 .pinwrap input{font-size:26px;letter-spacing:.4em;text-align:center;margin:14px 0}
@@ -184,10 +178,13 @@ const NUTRITION = { kcal:2300, protein:"160–175 g", fat:"70–80 g", carbs:"re
 
 /* ================= State ================= */
 const CACHE="trainlog.v2.cache", AUTH="trainlog.v2.auth";
-let state = { program:[], logs:[], weights:[], draft:null, pin:null };
+let state = { program:[], logs:[], weights:[], draft:null, pin:null, rests:{} };
 let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, logDate=null, syncStatus="";
 try{ const c=JSON.parse(localStorage.getItem(CACHE)); if(c) state={...state,...c}; }catch(e){}
-function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft})); }
+function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft,rests:state.rests})); }
+const restFor=exId=>state.rests[exId]||90;
+function setRest(exId,sec){ state.rests[exId]=sec; cache();
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"rests",value:state.rests}}); }
 
 /* ================= Helpers ================= */
 const $=id=>document.getElementById(id);
@@ -197,10 +194,23 @@ function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");cle
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("trainlog:"+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");}
 const exById=id=>state.program.find(e=>e.id===id);
-const sessionEx=key=>state.program.filter(e=>e.session_key===key&&e.active).sort((a,b)=>a.sort_order-b.sort_order);
+const sessKeys=e=>String(e.session_key).split(",");
+const inSess=(e,key)=>sessKeys(e).includes(key);
+const sessNames=e=>sessKeys(e).map(k=>SESSIONS[k]||k).join(" + ");
+const sessionEx=key=>state.program.filter(e=>inSess(e,key)&&e.active).sort((a,b)=>a.sort_order-b.sort_order);
 function lastLogsFor(exId,n){const out=[];const logs=[...state.logs].sort((a,b)=>a.date<b.date?-1:1);
   for(let i=logs.length-1;i>=0&&out.length<n;i--){const s=logs[i].entries[exId];if(s&&s.length)out.push({date:logs[i].date,sets:s});}return out;}
 function bestSet(sets){return sets.reduce((a,b)=>(b.w>a.w||(b.w===a.w&&b.r>a.r))?b:a,sets[0]);}
+const beats=(a,b)=>!!a&&(!b||a.w>b.w||(a.w===b.w&&a.r>b.r));
+function allTimeBest(exId,beforeLog){ // best set ever; if beforeLog given, only logs strictly before it
+  let best=null;
+  for(const l of state.logs){
+    if(beforeLog&&(l.date>beforeLog.date||(l.date===beforeLog.date&&l.id>=beforeLog.id)))continue;
+    const sets=l.entries[exId]; if(!sets)continue;
+    for(const s of sets) if(beats(s,best)) best=s;
+  }
+  return best;
+}
 function round25(x){return Math.round(x/2.5)*2.5;}
 
 /* ================= Sync ================= */
@@ -250,12 +260,13 @@ async function boot(){
   renderShell();
   render(); // instant paint from cache
   try{
-    const [pin,prog,logs,bw,draft] = await Promise.all([
+    const [pin,prog,logs,bw,draft,rests] = await Promise.all([
       api("/kv?key=eq.pin&select=value"),
       api("/program_exercises?select=*&order=sort_order"),
       api("/logs?select=*&order=date"),
       api("/bodyweights?select=*"),
       api("/kv?key=eq.draft&select=value"),
+      api("/kv?key=eq.rests&select=value"),
     ]);
     if(!prog.length){ // first run: seed program + migrated log
       await api("/program_exercises",{method:"POST",body:JSON.stringify(SEED)});
@@ -265,6 +276,7 @@ async function boot(){
     state.weights=bw;
     state.pin=pin.length?pin[0].value:null;
     if(draft.length&&draft[0].value) state.draft=draft[0].value;
+    if(rests.length&&rests[0].value) state.rests=rests[0].value;
     cache(); setSync("synced"); flush();
   }catch(e){ setSync("offline — using cached data",true); }
   authed = state.pin ? localStorage.getItem(AUTH)===state.pin : false;
@@ -367,7 +379,7 @@ function renderActive(){
     h+=`<div class="excard ${allDone&&!reorderMode?"collapsed":""}" id="exc-${ex.id}">
      <div class="exhead"><div style="min-width:0">
       <div class="exname">${allDone?"✓ ":""}${esc(ex.name)}</div>
-      <div class="exscheme num">${ex.sets}×${ex.rep_lo}–${ex.rep_hi} · ${ex.unit}</div></div>
+      <div class="exscheme num">${ex.sets}×${ex.rep_lo}–${ex.rep_hi} · ${ex.unit} · rest ${restFor(ex.id)}s${(b=>b?` · 🏆 ${b.w}×${b.r}`:"")(allTimeBest(ex.id))}</div></div>
      <div class="exctl">${reorderMode?
        `<button onclick="moveDraft(${xi},-1)" aria-label="Move up">↑</button>
         <button onclick="moveDraft(${xi},1)" aria-label="Move down">↓</button>
@@ -417,7 +429,7 @@ function toggleDone(exId,i){const s=state.draft.entries[exId][i];
   s.done=!s.done;
   if(s.done){ const g=lastSetGhost(exId,i);
     if(s.r===""&&g)s.r=g.r; if(s.w===""&&g)s.w=g.w;
-    startTimer(90);}
+    startTimer(restFor(exId));}
   saveDraft(); render();}
 let timerH=null;
 function startTimer(sec){
@@ -441,11 +453,13 @@ function finishSession(){
     .map(s=>({w:+s.w||0,r:+s.r,...(s.rir!==""?{rir:+s.rir}:{})}));
    if(sets.length){entries[id]=sets;any=true;}}
   if(!any){toast("Log at least one set first");return;}
+  const prs=[];
+  for(const id in entries){ if(beats(bestSet(entries[id]),allTimeBest(id))){const ex=exById(id);prs.push(ex?ex.name:id);} }
   const log={id:Date.now(),date:d.date,session_key:d.session_key,notes:d.notes,entries,ex_order:d.order};
   state.logs.push(log); state.draft=null; logDate=null; cache();
   push({path:"/logs",method:"POST",body:log});
   push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"draft",value:null}});
-  toast("Session saved 💪"); go("history");
+  toast(prs.length?"🏆 PR — "+prs.join(", ")+"!":"Session saved 💪"); go("history");
 }
 
 /* ================= Add-exercise form (shared) ================= */
@@ -453,10 +467,10 @@ function addExerciseForm(sessionKey,toDraft,swapId){
   const sw=swapId?`'${swapId}'`:"null", verb=swapId?"Swap":"Add";
   const inSession=new Set(toDraft?state.draft.order:sessionEx(sessionKey).map(e=>e.id));
   const opts=state.program.filter(e=>!inSession.has(e.id)&&(e.active||(e.is_custom&&toDraft)))
-    .map(e=>`<option value="${e.id}">${esc(e.name)} (${SESSIONS[e.session_key]||e.session_key})</option>`).join("");
+    .map(e=>`<option value="${e.id}">${esc(e.name)} (${sessNames(e)})</option>`).join("");
   return `<div class="editform">
    ${opts?`<div><label>From program</label><div class="row">
-     <select id="pickEx" class="grow"><option value="">— choose —</option>${opts}</select>
+     <select id="pickEx" class="grow" data-session="${sessionKey}"><option value="">— choose —</option>${opts}</select>
      <button class="btn small" onclick="pickExisting(${toDraft},${sw})">${verb}</button></div></div>
     <div class="small" style="text-align:center">— or create new —</div>`:""}
    <div class="fr"><div style="grid-column:1/-1"><label>Name</label><input id="nEx"></div></div>
@@ -465,7 +479,8 @@ function addExerciseForm(sessionKey,toDraft,swapId){
     <div><label>Rep lo</label><input id="nLo" inputmode="numeric" value="8"></div>
     <div><label>Rep hi</label><input id="nHi" inputmode="numeric" value="12"></div>
     <div><label>+kg step</label><input id="nInc" inputmode="decimal" value="2.5"></div>
-    <div><label>Unit</label><select id="nUnit"><option>kg</option><option>kg/db</option><option>+kg</option><option>bw</option><option>sec</option></select></div></div>
+    <div><label>Unit</label><select id="nUnit"><option>kg</option><option>kg/db</option><option>+kg</option><option>bw</option><option>sec</option></select></div>
+    <div><label>Rest s</label><input id="nRest" inputmode="numeric" value="90"></div></div>
    <div class="row"><button class="btn primary small" onclick="createExercise('${sessionKey}',${toDraft},${sw})">Create & ${verb.toLowerCase()}</button>
     <button class="btn ghost small" onclick="addingTo=null;swappingEx=null;render()">Cancel</button></div></div>`;
 }
@@ -473,7 +488,10 @@ function pickExisting(toDraft,swapId){
   const id=$("pickEx").value; if(!id)return;
   if(swapId){ if(!swapDraftEx(swapId,exById(id)))return; }
   else if(toDraft){ addToDraft(exById(id)); }
-  else{ const ex=exById(id); toast("That exercise belongs to "+SESSIONS[ex.session_key]+" — create a copy instead."); return; }
+  else{ const ex=exById(id), key=$("pickEx").dataset.session;
+    if(!inSess(ex,key)){ ex.session_key=sessKeys(ex).concat(key).join(","); ex.active=true;
+      push({path:"/program_exercises?id=eq."+ex.id,method:"PATCH",body:{session_key:ex.session_key,active:true}});
+      cache(); toast("Added to "+SESSIONS[key]+" — history is shared"); } }
   addingTo=null; render();
 }
 function swapDraftEx(oldId,newEx){
@@ -501,6 +519,7 @@ function createExercise(sessionKey,toDraft,swapId){
    increment:parseFloat($("nInc").value)||0, unit:$("nUnit").value,
    sort_order:(Math.max(0,...sessionEx(sessionKey).map(e=>e.sort_order))+10),
    active:!toDraft, is_custom:true };
+  const nr=parseInt($("nRest").value); if(nr&&nr!==90) setRest(ex.id,nr);
   if(swapId){
     if(!swapDraftEx(swapId,ex))return;
     state.program.push(ex); cache();
@@ -515,10 +534,24 @@ function createExercise(sessionKey,toDraft,swapId){
 
 /* ================= History ================= */
 function renderHistory(){
-  const n7=state.logs.filter(l=>l.date>=new Date(Date.now()-7*864e5).toISOString().slice(0,10)).length;
+  const iso=d=>new Date(Date.now()-d*864e5).toISOString().slice(0,10);
+  const n7=state.logs.filter(l=>l.date>=iso(7)).length;
   let h=`<div class="statgrid">
    <div class="stat"><div class="v num">${state.logs.length}</div><div class="d">sessions logged</div></div>
    <div class="stat"><div class="v num">${n7}</div><div class="d">last 7 days</div></div></div>`;
+  const vol=(from,to)=>{const per={};let tot=0;
+    for(const l of state.logs){ if(l.date<from||l.date>=to)continue;
+      const n=Object.values(l.entries).reduce((a,s)=>a+s.length,0);
+      per[l.session_key]=(per[l.session_key]||0)+n; tot+=n; }
+    return {per,tot};};
+  const cur=vol(iso(7),iso(-1)), prev=vol(iso(14),iso(7));
+  const diff=cur.tot-prev.tot;
+  h+=`<div class="card"><div class="label">Weekly volume — working sets</div>
+   <div class="progline"><span><strong>Total (7 days)</strong></span><span class="num"><strong>${cur.tot}</strong>
+    <span class="tag ${diff>=0?"good":"bad"}">${diff>=0?"+":""}${diff} vs prev wk</span></span></div>
+   ${SESSION_ORDER.filter(k=>cur.per[k]||prev.per[k]).map(k=>
+    `<div class="progline"><span>${SESSIONS[k]}</span><span class="num">${cur.per[k]||0} <span class="small">(prev ${prev.per[k]||0})</span></span></div>`).join("")}
+  </div>`;
   const withData=state.program.filter(e=>e.increment>0&&lastLogsFor(e.id,1).length);
   if(withData.length){
     sparkEx=sparkEx&&withData.some(e=>e.id===sparkEx)?sparkEx:withData[0].id;
@@ -539,7 +572,8 @@ function renderHistory(){
       const order=l.ex_order||Object.keys(l.entries);
       for(const exId of order){ const sets=l.entries[exId]; if(!sets)continue;
         const ex=exById(exId)||{name:exId};
-        h+=`<div class="hx"><div class="hxn">${esc(ex.name)}</div><div class="hxs">${sets.map(s=>s.w+"×"+s.r+(s.rir!==undefined?" @"+s.rir:"")).join(" · ")}</div></div>`;}
+        const pr=beats(bestSet(sets),allTimeBest(exId,l));
+        h+=`<div class="hx"><div class="hxn">${esc(ex.name)}${pr?' <span class="tag pr">PR</span>':""}</div><div class="hxs">${sets.map(s=>s.w+"×"+s.r+(s.rir!==undefined?" @"+s.rir:"")).join(" · ")}</div></div>`;}
       if(l.notes)h+=`<div class="small">“${esc(l.notes)}”</div>`;
       h+=`<button class="btn small" style="color:var(--bad);margin-top:6px" onclick="event.stopPropagation();delLog(${l.id})">Delete session</button></div>`;
     }
@@ -594,7 +628,7 @@ function renderProgram(){
         <button onclick="moveProg('${key}',${i},-1)" aria-label="Up">↑</button>
         <button onclick="moveProg('${key}',${i},1)" aria-label="Down">↓</button>
         <button onclick="editingEx='${ex.id}';render()" aria-label="Edit">✎</button>
-        <button onclick="removeProg('${ex.id}')" aria-label="Remove" style="color:var(--bad)">✕</button></span>`:""}</span></div>`;
+        <button onclick="removeProg('${ex.id}','${key}')" aria-label="Remove" style="color:var(--bad)">✕</button></span>`:""}</span></div>`;
     });
     if(editingProgram){
       h+=`<button class="btn ghost small" style="margin-top:8px" onclick="addingTo=addingTo==='${key}'?null:'${key}';render()">＋ Add exercise</button>`;
@@ -625,7 +659,8 @@ function editExerciseForm(ex){
     <div><label>Rep lo</label><input id="eL" inputmode="numeric" value="${ex.rep_lo}"></div>
     <div><label>Rep hi</label><input id="eH" inputmode="numeric" value="${ex.rep_hi}"></div>
     <div><label>+kg step</label><input id="eI" inputmode="decimal" value="${ex.increment}"></div>
-    <div><label>Unit</label><select id="eU">${["kg","kg/db","+kg","bw","sec","done"].map(u=>`<option ${ex.unit===u?"selected":""}>${u}</option>`).join("")}</select></div></div>
+    <div><label>Unit</label><select id="eU">${["kg","kg/db","+kg","bw","sec","done"].map(u=>`<option ${ex.unit===u?"selected":""}>${u}</option>`).join("")}</select></div>
+    <div><label>Rest s</label><input id="eR" inputmode="numeric" value="${restFor(ex.id)}"></div></div>
    <div class="row"><button class="btn primary small" onclick="saveExercise('${ex.id}')">Save</button>
     <button class="btn ghost small" onclick="editingEx=null;render()">Cancel</button></div></div>`;
 }
@@ -634,6 +669,7 @@ function saveExercise(id){
   ex.name=$("eN").value.trim()||ex.name; ex.sets=parseInt($("eS").value)||ex.sets;
   ex.rep_lo=parseInt($("eL").value)||ex.rep_lo; ex.rep_hi=parseInt($("eH").value)||ex.rep_hi;
   ex.increment=parseFloat($("eI").value)||0; ex.unit=$("eU").value;
+  const er=parseInt($("eR").value); if(er&&er!==restFor(id)) setRest(id,er);
   cache(); push({path:"/program_exercises?id=eq."+id,method:"PATCH",
    body:{name:ex.name,sets:ex.sets,rep_lo:ex.rep_lo,rep_hi:ex.rep_hi,increment:ex.increment,unit:ex.unit}});
   editingEx=null; toast("Saved"); render();
@@ -646,12 +682,18 @@ function moveProg(key,i,dir){
   push({path:"/program_exercises?id=eq."+b.id,method:"PATCH",body:{sort_order:b.sort_order}});
   render();
 }
-function removeProg(id){
-  const ex=exById(id);
-  if(!confirm("Remove \""+ex.name+"\" from the program? History is kept."))return;
-  ex.active=false; cache();
-  push({path:"/program_exercises?id=eq."+id,method:"PATCH",body:{active:false}});
-  render();
+function removeProg(id,key){
+  const ex=exById(id), keys=sessKeys(ex);
+  if(keys.length>1){
+    if(!confirm("Remove \""+ex.name+"\" from "+SESSIONS[key]+"? It stays in "+keys.filter(k=>k!==key).map(k=>SESSIONS[k]).join(", ")+"."))return;
+    ex.session_key=keys.filter(k=>k!==key).join(",");
+    push({path:"/program_exercises?id=eq."+id,method:"PATCH",body:{session_key:ex.session_key}});
+  }else{
+    if(!confirm("Remove \""+ex.name+"\" from the program? History is kept."))return;
+    ex.active=false;
+    push({path:"/program_exercises?id=eq."+id,method:"PATCH",body:{active:false}});
+  }
+  cache(); render();
 }
 </script>
 </body>
