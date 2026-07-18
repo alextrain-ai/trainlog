@@ -42,6 +42,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .btn.ghost{background:transparent;color:var(--muted);font-weight:600}
 .btn.small{padding:8px 12px;font-size:13px;border-radius:8px}
 .btn:active{transform:scale(.98)}
+.weekstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px}
+.wday{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 6px;border-radius:10px;background:var(--surface);border:1px solid var(--line)}
+.wday .wd{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.wday .wn{font-size:14px;font-weight:800}
+.wday .wp{font-size:8.5px;font-weight:800;letter-spacing:.03em;color:var(--muted)}
+.wday.done .wp{color:var(--good)}
+.wday.done{border-color:var(--good)}
+.wday.today{border-color:var(--accent)}
+.wday.sel{background:var(--chip)}
+.wday.today .wn{color:var(--accent)}
+.wday:disabled{opacity:.4}
+.sesscard.planned{border-color:var(--accent)}
 .sessgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .sesscard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left;display:flex;flex-direction:column;gap:4px;min-height:92px}
 .sesscard .sname{font-weight:900;font-size:14.5px;text-transform:uppercase;letter-spacing:.03em}
@@ -178,10 +190,10 @@ const NUTRITION = { kcal:2300, protein:"160–175 g", fat:"70–80 g", carbs:"re
 
 /* ================= State ================= */
 const CACHE="trainlog.v2.cache", AUTH="trainlog.v2.auth";
-let state = { program:[], logs:[], weights:[], draft:null, pin:null, rests:{} };
+let state = { program:[], logs:[], weights:[], draft:null, pin:null, rests:{}, schedule:{} };
 let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, logDate=null, syncStatus="";
 try{ const c=JSON.parse(localStorage.getItem(CACHE)); if(c) state={...state,...c}; }catch(e){}
-function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft,rests:state.rests})); }
+function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft,rests:state.rests,schedule:state.schedule})); }
 const restFor=exId=>state.rests[exId]||90;
 function setRest(exId,sec){ state.rests[exId]=sec; cache();
   push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"rests",value:state.rests}}); }
@@ -260,13 +272,14 @@ async function boot(){
   renderShell();
   render(); // instant paint from cache
   try{
-    const [pin,prog,logs,bw,draft,rests] = await Promise.all([
+    const [pin,prog,logs,bw,draft,rests,sched] = await Promise.all([
       api("/kv?key=eq.pin&select=value"),
       api("/program_exercises?select=*&order=sort_order"),
       api("/logs?select=*&order=date"),
       api("/bodyweights?select=*"),
       api("/kv?key=eq.draft&select=value"),
       api("/kv?key=eq.rests&select=value"),
+      api("/kv?key=eq.schedule&select=value"),
     ]);
     if(!prog.length){ // first run: seed program + migrated log
       await api("/program_exercises",{method:"POST",body:JSON.stringify(SEED)});
@@ -277,6 +290,7 @@ async function boot(){
     state.pin=pin.length?pin[0].value:null;
     if(draft.length&&draft[0].value) state.draft=draft[0].value;
     if(rests.length&&rests[0].value) state.rests=rests[0].value;
+    if(sched.length&&sched[0].value) state.schedule=sched[0].value;
     cache(); setSync("synced"); flush();
   }catch(e){ setSync("offline — using cached data",true); }
   authed = state.pin ? localStorage.getItem(AUTH)===state.pin : false;
@@ -321,12 +335,40 @@ async function submitPin(first){
   else toast("Wrong PIN");
 }
 
+/* ================= Schedule / calendar ================= */
+const DAYNAMES=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const SHORTSESS={upperA:"UP A",lowerA:"LO A",upperB:"UP B",lowerB:"LO B",skills:"SKILL"};
+const dayIdx=iso=>(new Date(iso+"T12:00").getDay()+6)%7; // 0=Mon
+function plannedFor(iso){ return state.schedule[dayIdx(iso)]||null; }
+function setSchedule(day,key){
+  if(key) state.schedule[day]=key; else delete state.schedule[day];
+  cache(); push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"schedule",value:state.schedule}});
+  render();
+}
+function weekStrip(day){
+  const base=new Date(day+"T12:00"); base.setDate(base.getDate()-dayIdx(day)); // Monday of that week
+  let h=`<div class="weekstrip">`;
+  for(let i=0;i<7;i++){
+    const dt=new Date(base); dt.setDate(base.getDate()+i);
+    const iso=dt.toISOString().slice(0,10), plan=state.schedule[i];
+    const done=state.logs.some(l=>l.date===iso);
+    const cls=["wday",iso===todayISO()?"today":"",done?"done":"",iso===day?"sel":""].join(" ");
+    h+=`<button class="${cls}" onclick="logDate='${iso}'===todayISO()?null:'${iso}';render()" ${iso>todayISO()?"disabled":""}>
+     <span class="wd">${DAYNAMES[i]}</span><span class="wn num">${dt.getDate()}</span>
+     <span class="wp">${done?"✓":plan?SHORTSESS[plan]||"?":"—"}</span></button>`;
+  }
+  return h+`</div>`;
+}
+
 /* ================= Today ================= */
 function renderToday(){
   if(state.draft){renderActive();return;}
   const day=logDate||todayISO(), isToday=day===todayISO();
   const doneToday=new Set(state.logs.filter(l=>l.date===day).map(l=>l.session_key));
-  let h=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
+  const plan=plannedFor(day);
+  let h=weekStrip(day);
+  if(plan&&!doneToday.has(plan)) h+=`<div class="target" style="margin:0 0 10px">${isToday?"Today's plan":"Planned"}: <strong>${SESSIONS[plan]}</strong></div>`;
+  h+=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
    <div class="label">Pick ${isToday?"today's":"the"} session</div>
    <div class="row"><input type="date" id="logDate" value="${day}" max="${todayISO()}"
      onchange="logDate=this.value===todayISO()?null:this.value;render()" style="max-width:150px">
@@ -335,8 +377,8 @@ function renderToday(){
    <div class="sessgrid">`;
   for(const key of SESSION_ORDER){
     const last=[...state.logs].filter(l=>l.session_key===key).sort((a,b)=>a.date<b.date?-1:1).slice(-1)[0];
-    h+=`<button class="sesscard ${doneToday.has(key)?"done":""}" onclick="startSession('${key}')">
-     <span class="sname">${SESSIONS[key]}</span><span class="smeta">${sessionEx(key).length} exercises</span>
+    h+=`<button class="sesscard ${doneToday.has(key)?"done":""} ${plan===key&&!doneToday.has(key)?"planned":""}" onclick="startSession('${key}')">
+     <span class="sname">${SESSIONS[key]}${plan===key?' <span class="tag pr" style="font-size:9px">PLAN</span>':""}</span><span class="smeta">${sessionEx(key).length} exercises</span>
      <span class="smeta">${doneToday.has(key)?`<span class="tag good">Done ${isToday?"today":fmtDate(day)}</span>`:last?"Last: "+fmtDate(last.date):"Never logged"}</span></button>`;
   }
   h+=`</div><div class="divider"></div>`;
@@ -636,7 +678,14 @@ function renderProgram(){
     }
     h+=`</div>`;
   }
-  h+=`<div class="card"><h2>Nutrition</h2>
+  h+=`<div class="card"><h2>Weekly schedule</h2>
+   <div class="small" style="margin-bottom:6px">Pick which session each day gets — shows on the Today calendar.</div>
+   ${DAYNAMES.map((d,i)=>`<div class="progline"><span>${d}</span>
+    <select style="max-width:170px" onchange="setSchedule(${i},this.value)">
+     <option value="">Rest</option>
+     ${SESSION_ORDER.map(k=>`<option value="${k}" ${state.schedule[i]===k?"selected":""}>${SESSIONS[k]}</option>`).join("")}
+    </select></div>`).join("")}</div>
+  <div class="card"><h2>Nutrition</h2>
    <div class="progline"><span>Calories</span><span class="num"><strong>${NUTRITION.kcal} kcal</strong></span></div>
    <div class="progline"><span>Protein</span><span class="num">${NUTRITION.protein}</span></div>
    <div class="progline"><span>Fat</span><span class="num">${NUTRITION.fat}</span></div>
