@@ -337,20 +337,29 @@ async function submitPin(first){
 
 /* ================= Schedule / calendar ================= */
 const DAYNAMES=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const SHORTSESS={upperA:"UP A",lowerA:"LO A",upperB:"UP B",lowerB:"LO B",skills:"SKILL"};
+const SHORTSESS={upperA:"UP A",lowerA:"LO A",upperB:"UP B",lowerB:"LO B",skills:"SKILL",rest:"REST"};
+const REST_NOTE="Swim or easy run + stretching / calisthenics";
 const dayIdx=iso=>(new Date(iso+"T12:00").getDay()+6)%7; // 0=Mon
-function plannedFor(iso){ return state.schedule[dayIdx(iso)]||null; }
-function setSchedule(day,key){
-  if(key) state.schedule[day]=key; else delete state.schedule[day];
-  cache(); push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"schedule",value:state.schedule}});
-  render();
+function plannedFor(iso){ // repeating cycle anchored at schedule.start
+  const sc=state.schedule; if(!sc||!sc.cycle||!sc.cycle.length||!sc.start) return null;
+  const d=Math.round((Date.parse(iso)-Date.parse(sc.start))/864e5);
+  if(d<0) return null;
+  return sc.cycle[d%sc.cycle.length]||null;
 }
+function schedSave(){ cache();
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"schedule",value:state.schedule}});
+  render(); }
+function cycleSet(i,v){ state.schedule.cycle[i]=v; schedSave(); }
+function cycleAdd(){ state.schedule.cycle.push("rest"); schedSave(); }
+function cycleDel(i){ state.schedule.cycle.splice(i,1); schedSave(); }
+function cycleStart(v){ state.schedule.start=v; schedSave(); }
+function cycleInit(){ state.schedule={start:todayISO(),cycle:["upperA","lowerB","rest","upperB","lowerA","rest"]}; schedSave(); }
 function weekStrip(day){
   const base=new Date(day+"T12:00"); base.setDate(base.getDate()-dayIdx(day)); // Monday of that week
   let h=`<div class="weekstrip">`;
   for(let i=0;i<7;i++){
     const dt=new Date(base); dt.setDate(base.getDate()+i);
-    const iso=dt.toISOString().slice(0,10), plan=state.schedule[i];
+    const iso=dt.toISOString().slice(0,10), plan=plannedFor(iso);
     const done=state.logs.some(l=>l.date===iso);
     const cls=["wday",iso===todayISO()?"today":"",done?"done":"",iso===day?"sel":""].join(" ");
     h+=`<button class="${cls}" onclick="logDate='${iso}'===todayISO()?null:'${iso}';render()" ${iso>todayISO()?"disabled":""}>
@@ -367,7 +376,8 @@ function renderToday(){
   const doneToday=new Set(state.logs.filter(l=>l.date===day).map(l=>l.session_key));
   const plan=plannedFor(day);
   let h=weekStrip(day);
-  if(plan&&!doneToday.has(plan)) h+=`<div class="target" style="margin:0 0 10px">${isToday?"Today's plan":"Planned"}: <strong>${SESSIONS[plan]}</strong></div>`;
+  if(plan==="rest") h+=`<div class="target plain" style="margin:0 0 10px">${isToday?"Today":"That day"} is a <strong>rest day</strong> — ${REST_NOTE}.</div>`;
+  else if(plan&&!doneToday.has(plan)) h+=`<div class="target" style="margin:0 0 10px">${isToday?"Today's plan":"Planned"}: <strong>${SESSIONS[plan]}</strong></div>`;
   h+=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
    <div class="label">Pick ${isToday?"today's":"the"} session</div>
    <div class="row"><input type="date" id="logDate" value="${day}" max="${todayISO()}"
@@ -678,14 +688,23 @@ function renderProgram(){
     }
     h+=`</div>`;
   }
-  h+=`<div class="card"><h2>Weekly schedule</h2>
-   <div class="small" style="margin-bottom:6px">Pick which session each day gets — shows on the Today calendar.</div>
-   ${DAYNAMES.map((d,i)=>`<div class="progline"><span>${d}</span>
-    <select style="max-width:170px" onchange="setSchedule(${i},this.value)">
-     <option value="">Rest</option>
-     ${SESSION_ORDER.map(k=>`<option value="${k}" ${state.schedule[i]===k?"selected":""}>${SESSIONS[k]}</option>`).join("")}
-    </select></div>`).join("")}</div>
-  <div class="card"><h2>Nutrition</h2>
+  const sc=state.schedule;
+  h+=`<div class="card"><h2>Training cycle</h2>`;
+  if(sc&&sc.cycle&&sc.cycle.length){
+    h+=`<div class="small" style="margin-bottom:6px">Repeats every ${sc.cycle.length} days — the Today calendar follows it.</div>
+     <div class="progline"><span>Day 1 starts</span><input type="date" value="${sc.start}" style="max-width:150px" onchange="cycleStart(this.value)"></div>
+     ${sc.cycle.map((k,i)=>`<div class="progline"><span>Day ${i+1}</span>
+      <span class="row"><select style="max-width:150px" onchange="cycleSet(${i},this.value)">
+       <option value="rest" ${k==="rest"?"selected":""}>Rest day</option>
+       ${SESSION_ORDER.map(s=>`<option value="${s}" ${k===s?"selected":""}>${SESSIONS[s]}</option>`).join("")}
+      </select>${editingProgram?`<button class="btn small" style="color:var(--bad)" onclick="cycleDel(${i})">✕</button>`:""}</span></div>`).join("")}
+     ${editingProgram?`<button class="btn ghost small" style="margin-top:8px" onclick="cycleAdd()">＋ Add day</button>`:""}
+     <div class="small" style="margin-top:8px">Rest days: ${REST_NOTE.toLowerCase()}.</div>`;
+  }else{
+    h+=`<div class="small" style="margin-bottom:8px">No cycle set.</div>
+     <button class="btn small" onclick="cycleInit()">Create default cycle (UP A → LO B → rest → UP B → LO A → rest)</button>`;
+  }
+  h+=`</div><div class="card"><h2>Nutrition</h2>
    <div class="progline"><span>Calories</span><span class="num"><strong>${NUTRITION.kcal} kcal</strong></span></div>
    <div class="progline"><span>Protein</span><span class="num">${NUTRITION.protein}</span></div>
    <div class="progline"><span>Fat</span><span class="num">${NUTRITION.fat}</span></div>
