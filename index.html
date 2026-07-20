@@ -436,7 +436,8 @@ function renderActive(){
        `<button onclick="moveDraft(${xi},-1)" aria-label="Move up">↑</button>
         <button onclick="moveDraft(${xi},1)" aria-label="Move down">↓</button>
         <button onclick="removeDraftEx('${ex.id}')" aria-label="Remove">✕</button>`:
-       `<button onclick="swappingEx=swappingEx==='${ex.id}'?null:'${ex.id}';render()" aria-label="Swap exercise">⇄</button>`+
+       `<button onclick="swappingEx=swappingEx==='${ex.id}'?null:'${ex.id}';render()" aria-label="Swap exercise">⇄</button>
+        <button onclick="removeDraftEx('${ex.id}')" aria-label="Remove exercise" style="color:var(--bad)">🗑</button>`+
        (allDone?`<button onclick="toggleCollapse('${ex.id}')">⌄</button>`:"")}
      ${t.tag==="bad"?'<span class="tag bad" style="align-self:center">Deload</span>':""}</div></div>
      <div class="exbody">
