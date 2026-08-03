@@ -121,6 +121,12 @@ ul.tight li{margin-bottom:4px}
 .pinwrap input{font-size:26px;letter-spacing:.4em;text-align:center;margin:14px 0}
 .ordctl{display:flex;gap:4px}
 .ordctl button{padding:5px 9px;font-size:13px;border-radius:7px;color:var(--muted)}
+.routinebar{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.routinebar button{flex:0 0 auto;background:var(--surface);border:1px solid var(--line);color:var(--muted);border-radius:99px;padding:7px 14px;font-size:13px;font-weight:700;white-space:nowrap}
+.routinebar button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.blockhead{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--accent);margin:12px 0 2px;padding-top:8px;border-top:1px solid var(--line)}
+.blockhead:first-child{margin-top:2px;padding-top:0;border-top:none}
+.exblock{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:3px}
 </style>
 </head>
 <body>
@@ -142,10 +148,23 @@ async function api(path, opts={}){
 const kvSet = (key,value)=> api("/kv?on_conflict=key",{method:"POST",prefer:"resolution=merge-duplicates",body:JSON.stringify({key,value})});
 
 /* ================= Default program (seed) ================= */
-const SESSIONS = {upperA:"Upper A", lowerA:"Lower A", upperB:"Upper B", lowerB:"Lower B", skills:"Skills / Calisthenics"};
-const SESSION_NOTE = {upperA:"Incline first — upper-chest priority", lowerA:"Rehab block first, every lower day",
-  upperB:"Volume day + loaded abs", lowerB:"Optional 4th day — quad + calf emphasis", skills:"Quality over fatigue — log holds in seconds"};
-const SESSION_ORDER = ["upperA","lowerA","upperB","lowerB","skills"];
+/* Gym routine — the original 4+1. Days are migration-only literals; at runtime
+   everything comes from state.routines (kv key "routines"). */
+const GYM_DAYS = [
+ {key:"upperA", name:"Upper A", short:"UP A", note:"Incline first — upper-chest priority"},
+ {key:"lowerA", name:"Lower A", short:"LO A", note:"Rehab block first, every lower day"},
+ {key:"upperB", name:"Upper B", short:"UP B", note:"Volume day + loaded abs"},
+ {key:"lowerB", name:"Lower B", short:"LO B", note:"Optional 4th day — quad + calf emphasis"},
+ {key:"skills", name:"Skills / Calisthenics", short:"SKILL", note:"Quality over fatigue — log holds in seconds"},
+];
+const GYM_RULES = [
+ "<strong>Progression:</strong> top of rep range on all sets at RIR ≥ 1 → target goes up next session.",
+ "<strong>Stall:</strong> 3 flat sessions → deload 10% and rebuild.",
+ "<strong>Deficit warning:</strong> recovery slips → trim accessories, never main lifts.",
+ "<strong>Ankle (until ~mid-Aug 2026):</strong> flat easy running only; brace/tape for basketball until ~Sep; swimming unrestricted.",
+ "<strong>Calves at home:</strong> 2×15–20 slow single-leg raises on a step, most days.",
+];
+const GYM_REST_NOTE = "Swim or easy run + stretching / calisthenics";
 const SEED = [
  ["inclbb","upperA","Incline Barbell Press",4,6,9,2.5,"kg"],
  ["wpullup","upperA","Weighted Pull-Up",4,6,10,2.5,"+kg"],
@@ -188,15 +207,124 @@ const MIGRATED_LOG = { id:1783883705820, date:"2026-07-12", session_key:"upperA"
   ohtri:[{w:35,r:12,rir:2},{w:25,r:12,rir:3},{w:25,r:12,rir:3}] } };
 const NUTRITION = { kcal:2300, protein:"160–175 g", fat:"70–80 g", carbs:"remainder (~230–260 g)" };
 
+/* ================= Power routine (from "The Lost Art of Power Training") =================
+   Ordering rule for every day: nervous-system/elastic work FIRST while fresh,
+   muscle work in the middle, tissue + mobility LAST. */
+const POWER_DAYS = [
+ {key:"pwLower",  name:"Lower · Vertical Power", short:"VERT",  note:"Jumps fresh → speed squat → engine → deep tissue work"},
+ {key:"pwPress",  name:"Upper · Press Power",    short:"PRESS", note:"Throws and clap push-ups before anything heavy"},
+ {key:"pwSprint", name:"Sprint · Rotate · Land", short:"SPRNT", note:"Outdoors. Full recovery between reps — sprinting tired isn't sprinting"},
+ {key:"pwHinge",  name:"Hinge · Posterior · Pull",short:"HINGE",note:"Broad jumps first, then pull heavy"},
+ {key:"pwRepeat", name:"Repeatable Power",       short:"REPT",  note:"Power in sequence — unbroken reps, no reset at the top"},
+];
+/* [id, day, name, sets, rep_lo, rep_hi, increment, unit, block, rest_sec] */
+const POWER_SEED = [
+ ["pogo","pwLower","Pogo Hops (minimal contact)",3,10,10,0,"bw","A — Elastic",120],
+ ["boxjump","pwLower","Box Jump (full reset)",5,3,3,0,"bw","A — Elastic",120],
+ ["pwsquat","pwLower","Back Squat (speed, 82–87%)",5,3,3,2.5,"kg","B — Nervous system",180],
+ ["pwbss","pwLower","Bulgarian Split Squat (per leg)",3,8,8,2,"kg/db","C — Engine",90],
+ ["pwrdl","pwLower","Romanian Deadlift (never set it down)",3,10,10,5,"kg","C — Engine",90],
+ ["atgss","pwLower","ATG Split Squat (per leg, slow)",2,10,10,0,"bw","D — Vessel",60],
+ ["sumohold","pwLower","Deep Sumo Squat, feet elevated",3,45,45,0,"sec","D — Vessel",60],
+ ["pwcalf","pwLower","Full Calf Raise (3 s pause bottom)",3,15,15,2.5,"kg","D — Vessel",60],
+
+ ["mbchest","pwPress","Med-Ball Chest Pass into Wall",5,3,3,1,"kg","A — Elastic",120],
+ ["clappu","pwPress","Clap / Drop Push-Up",3,5,5,0,"bw","A — Elastic",120],
+ ["pushpress","pwPress","Push Press (leg drive intended)",5,3,3,2.5,"kg","B — Nervous system",180],
+ ["pwbench","pwPress","Barbell Bench Press (@82%)",4,4,4,2.5,"kg","B — Nervous system",180],
+ ["pwincdb","pwPress","Incline DB Press",3,8,10,2,"kg/db","C — Engine",90],
+ ["onearmrow","pwPress","One-Arm DB Row (per side)",3,10,10,2.5,"kg/db","C — Engine",90],
+ ["latritri","pwPress","Lateral Raise + Triceps Ext. superset",3,15,15,1,"kg","C — Engine",90],
+ ["fullflye","pwPress","Full-Range DB Flye (4 s eccentric)",2,12,12,1,"kg/db","D — Vessel",60],
+ ["pullover","pwPress","DB Pullover (max reach back)",2,12,12,2,"kg/db","D — Vessel",60],
+ ["deadhang","pwPress","Dead-Hang Pull-Up (full bottom reach)",2,6,6,0,"bw","D — Vessel",60],
+
+ ["jumprope","pwSprint","Jump Rope",1,5,5,0,"min","A — Prime",60],
+ ["accel20","pwSprint","Acceleration Run, standing start",6,20,20,0,"m","B — Sprint",180],
+ ["flying30","pwSprint","Flying Sprint, max velocity",3,30,30,0,"m","B — Sprint",180],
+ ["shuttle","pwSprint","5-10-5 Shuttle (change of direction)",4,1,1,0,"done","B — Sprint",180],
+ ["mbrot","pwSprint","Rotational Med-Ball Throw (per side)",4,3,3,1,"kg","C — Rotation",120],
+ ["mbrotrep","pwSprint","Repeated Rotational Throws (no reset)",3,6,6,1,"kg","C — Rotation",120],
+ ["kbwindmill","pwSprint","Kettlebell Windmill (per side)",2,6,6,2,"kg","D — Vessel",60],
+ ["backbridge","pwSprint","Back Bridge Hold",3,30,30,0,"sec","D — Vessel",60],
+
+ ["broadjump","pwHinge","Standing Broad Jump (full reset)",5,3,3,0,"bw","A — Elastic",120],
+ ["broadrep","pwHinge","Repeated Broad Jumps (continuous)",3,3,3,0,"bw","A — Elastic",120],
+ ["pwdead","pwHinge","Deadlift (@85%)",4,3,3,5,"kg","B — Nervous system",180],
+ ["pendlay","pwHinge","Barbell Bent / Pendlay Row",4,5,5,2.5,"kg","B — Nervous system",180],
+ ["slrdl","pwHinge","Single-Leg RDL, heavy (per leg)",3,8,8,2,"kg/db","C — Engine",90],
+ ["pwwpullup","pwHinge","Weighted Pull-Up",4,6,6,2.5,"+kg","C — Engine",90],
+ ["hamcurl","pwHinge","Hamstring Curl",3,12,12,2.5,"kg","C — Engine",90],
+ ["goodmorn","pwHinge","Full-Range Good Morning (light)",2,10,10,2.5,"kg","D — Vessel",60],
+ ["ghdsit","pwHinge","GHD Sit-Up (full extension back)",2,10,10,0,"bw","D — Vessel",60],
+ ["sidebend","pwHinge","Loaded Side Bend (per side)",2,12,12,2,"kg/db","D — Vessel",60],
+
+ ["powerclean","pwRepeat","Power Clean (light bar, violent pull)",6,2,2,2.5,"kg","A — Sequenced explosive",150],
+ ["contjump","pwRepeat","Continuous Jumps (no reset)",4,5,5,0,"bw","A — Sequenced explosive",150],
+ ["frontsq","pwRepeat","Front Squat, unbroken (no pause at top)",4,5,5,2.5,"kg","B — Unbroken reps",120],
+ ["kbswing","pwRepeat","Kettlebell Swing",5,15,15,4,"kg","B — Unbroken reps",90],
+ ["carry","pwRepeat","Loaded Carry (farmer's / front rack)",4,40,40,5,"m","C — Vessel & carry",90],
+ ["ohtri2","pwRepeat","Overhead Triceps Ext., full range",2,12,12,2.5,"kg","C — Vessel & carry",60],
+ ["incurl2","pwRepeat","Incline Curl (leaning back)",2,12,12,1,"kg/db","C — Vessel & carry",60],
+].map((r,i)=>({id:r[0],session_key:r[1],name:r[2],sets:r[3],rep_lo:r[4],rep_hi:r[5],increment:r[6],unit:r[7],
+  sort_order:1000+(i+1)*10,active:true,is_custom:false,_block:r[8],_rest:r[9]}));
+const POWER_RULES = [
+ "<strong>Engine (block C):</strong> add reps inside 6–12, then add load and drop back to 6. The one block where fatigue is the point.",
+ "<strong>Nervous system (block B):</strong> ≤ 6 reps forever. Add load only while bar speed holds — a rep that grinds trained strength, not power.",
+ "<strong>Elastic (block A):</strong> never train to fatigue. Stop the set the moment height, distance or sprint feel drops ~5%.",
+ "<strong>Vessel (block D):</strong> add range before load. Slow, never explosive — tendons run on a longer clock than muscle.",
+ "<strong>Every 4th week:</strong> lighter week — keep the elastic work, cut block B loads ~20%.",
+ "<strong>Retest every 6 weeks, rested:</strong> vertical jump, broad jump, 10 m sprint, seated med-ball throw, deep squat hold.",
+];
+const POWER_REST_NOTE = "Easy movement — walk, swim, mobility. Keep it off the legs";
+
 /* ================= State ================= */
 const CACHE="trainlog.v2.cache", AUTH="trainlog.v2.auth";
-let state = { program:[], logs:[], weights:[], draft:null, pin:null, rests:{}, schedule:{} };
-let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, logDate=null, syncStatus="";
+let state = { program:[], logs:[], weights:[], draft:null, pin:null, rests:{}, blocks:{}, routines:null };
+let tab="today", authed=false, openLog=null, sparkEx=null, editingProgram=false, editingEx=null, addingTo=null, reorderMode=false, swappingEx=null, logDate=null, syncStatus="", editingDay=null, editingRoutine=false;
 try{ const c=JSON.parse(localStorage.getItem(CACHE)); if(c) state={...state,...c}; }catch(e){}
-function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft,rests:state.rests,schedule:state.schedule})); }
+function cache(){ localStorage.setItem(CACHE, JSON.stringify({program:state.program,logs:state.logs,weights:state.weights,draft:state.draft,rests:state.rests,blocks:state.blocks,routines:state.routines})); }
 const restFor=exId=>state.rests[exId]||90;
 function setRest(exId,sec){ state.rests[exId]=sec; cache();
   push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"rests",value:state.rests}}); }
+const UNITS=["kg","kg/db","+kg","bw","sec","done","m","min"];
+const COUNT_LABEL={sec:"Sec",m:"Metres",min:"Min"};
+const countLabel=u=>COUNT_LABEL[u]||"Reps";
+const loadLabel=u=>(u==="bw"||u==="done")?"Load":(u==="+kg"?"Added":"Weight");
+const countNoun=u=>({sec:"sec",m:"m",min:"min"}[u]||"reps");
+const unloaded=u=>u==="bw"||u==="done";
+/* nothing to add weight to: bodyweight/done units, or no load step configured */
+const noLoad=ex=>unloaded(ex.unit)||!(ex.increment>0);
+const loadPlaceholder=ex=>noLoad(ex)?"–":(ex.unit==="kg/db"?"kg/db":"kg");
+const repRange=ex=>ex.rep_lo===ex.rep_hi?String(ex.rep_lo):ex.rep_lo+"–"+ex.rep_hi;
+const scheme=ex=>ex.sets+"×"+repRange(ex)+(COUNT_LABEL[ex.unit]?" "+ex.unit:"");
+const blockFor=exId=>state.blocks[exId]||"";
+function setBlock(exId,label){ if(label) state.blocks[exId]=label; else delete state.blocks[exId]; cache();
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"blocks",value:state.blocks}}); }
+
+/* ================= Routines ================= */
+const routineList=()=>(state.routines&&state.routines.list)||[];
+function activeRoutine(){ const l=routineList(); return l.find(r=>r.id===state.routines.active)||l[0]||null; }
+const routineDays=()=>{const r=activeRoutine();return r?r.days:[];};
+const dayOrder=()=>routineDays().map(d=>d.key);
+function dayMeta(key){ // searches every routine, so history from a deleted routine still reads
+  for(const r of routineList()) { const d=r.days.find(d=>d.key===key); if(d) return d; }
+  return {key,name:key,short:key.slice(0,5).toUpperCase(),note:""};
+}
+const dayName=key=>dayMeta(key).name;
+const dayShort=key=>dayMeta(key).short||dayMeta(key).name.slice(0,5).toUpperCase();
+const dayNote=key=>dayMeta(key).note||"";
+const restNote=()=>{const r=activeRoutine();return (r&&r.restNote)||GYM_REST_NOTE;};
+function routinesSave(){ cache();
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"routines",value:state.routines}}); }
+function routineSwitcher(){
+  const l=routineList(); if(l.length<2) return "";
+  return `<div class="routinebar">${l.map(r=>`<button class="${r.id===state.routines.active?"on":""}" onclick="switchRoutine('${r.id}')">${esc(r.name)}</button>`).join("")}</div>`;
+}
+function switchRoutine(id){
+  if(state.draft&&!confirm("You have a session in progress. Switch routine anyway? (the session stays saved)")) return;
+  state.routines.active=id; editingEx=null; addingTo=null; editingDay=null; routinesSave(); render(); window.scrollTo(0,0);
+}
 
 /* ================= Helpers ================= */
 const $=id=>document.getElementById(id);
@@ -208,7 +336,7 @@ async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncod
 const exById=id=>state.program.find(e=>e.id===id);
 const sessKeys=e=>String(e.session_key).split(",");
 const inSess=(e,key)=>sessKeys(e).includes(key);
-const sessNames=e=>sessKeys(e).map(k=>SESSIONS[k]||k).join(" + ");
+const sessNames=e=>sessKeys(e).map(dayName).join(" + ");
 const sessionEx=key=>state.program.filter(e=>inSess(e,key)&&e.active).sort((a,b)=>a.sort_order-b.sort_order);
 function lastLogsFor(exId,n){const out=[];const logs=[...state.logs].sort((a,b)=>a.date<b.date?-1:1);
   for(let i=logs.length-1;i>=0&&out.length<n;i--){const s=logs[i].entries[exId];if(s&&s.length)out.push({date:logs[i].date,sets:s});}return out;}
@@ -249,9 +377,12 @@ function debounce(f,ms){let h;return(...a)=>{clearTimeout(h);h=setTimeout(()=>f(
 
 /* ================= Progression ================= */
 function target(ex){
-  const hist=lastLogsFor(ex.id,3);
-  if(!hist.length) return {txt:"First time — pick a weight for "+ex.rep_lo+"–"+ex.rep_hi+" reps with 2 in reserve.",w:null,cls:"plain"};
+  const hist=lastLogsFor(ex.id,3), noun=countNoun(ex.unit);
+  if(!hist.length) return {txt: noLoad(ex)
+      ? "First time — aim for "+repRange(ex)+" "+noun+", quality over fatigue."
+      : "First time — pick a weight for "+repRange(ex)+" "+noun+" with 2 in reserve.", w:null,cls:"plain"};
   const last=hist[0].sets, top=bestSet(last);
+  if(noLoad(ex)) return {txt:"Last: "+top.r+" "+noun+". Match or beat it — stop if quality drops.",w:null,cls:"plain"};
   const allTop=last.every(s=>s.r>=ex.rep_hi&&(s.rir===undefined||s.rir>=1));
   const anyBelow=last.some(s=>s.r<ex.rep_lo);
   let stalled=false;
@@ -261,8 +392,8 @@ function target(ex){
   }
   if(stalled) return {txt:"Stalled 3 sessions — deload to "+round25(top.w*0.9)+" "+ex.unit+" and rebuild.",w:round25(top.w*0.9),cls:"",tag:"bad"};
   if(allTop&&ex.increment>0) return {txt:"Last: "+top.w+"×"+top.r+" — all sets at top. Go "+(top.w+ex.increment)+" "+ex.unit+" today.",w:top.w+ex.increment,cls:""};
-  if(anyBelow&&ex.increment>0) return {txt:"Last: "+top.w+"×"+top.r+" — missed "+ex.rep_lo+" reps. Stay at "+top.w+" (or −5%).",w:top.w,cls:"plain"};
-  return {txt:"Last: "+top.w+"×"+top.r+". Same weight — beat the reps.",w:top.w,cls:"plain"};
+  if(anyBelow&&ex.increment>0) return {txt:"Last: "+top.w+"×"+top.r+" — missed "+ex.rep_lo+" "+noun+". Stay at "+top.w+" (or −5%).",w:top.w,cls:"plain"};
+  return {txt:"Last: "+top.w+"×"+top.r+". Same weight — beat the "+noun+".",w:top.w,cls:"plain"};
 }
 function lastSetGhost(exId,i){ const h=lastLogsFor(exId,1); if(!h.length)return null; return h[0].sets[i]||null; }
 
@@ -272,7 +403,7 @@ async function boot(){
   renderShell();
   render(); // instant paint from cache
   try{
-    const [pin,prog,logs,bw,draft,rests,sched] = await Promise.all([
+    const [pin,prog,logs,bw,draft,rests,sched,routines,blocks] = await Promise.all([
       api("/kv?key=eq.pin&select=value"),
       api("/program_exercises?select=*&order=sort_order"),
       api("/logs?select=*&order=date"),
@@ -280,6 +411,8 @@ async function boot(){
       api("/kv?key=eq.draft&select=value"),
       api("/kv?key=eq.rests&select=value"),
       api("/kv?key=eq.schedule&select=value"),
+      api("/kv?key=eq.routines&select=value"),
+      api("/kv?key=eq.blocks&select=value"),
     ]);
     if(!prog.length){ // first run: seed program + migrated log
       await api("/program_exercises",{method:"POST",body:JSON.stringify(SEED)});
@@ -290,11 +423,41 @@ async function boot(){
     state.pin=pin.length?pin[0].value:null;
     if(draft.length&&draft[0].value) state.draft=draft[0].value;
     if(rests.length&&rests[0].value) state.rests=rests[0].value;
-    if(sched.length&&sched[0].value) state.schedule=sched[0].value;
+    if(blocks.length&&blocks[0].value) state.blocks=blocks[0].value;
+    if(routines.length&&routines[0].value) state.routines=routines[0].value;
+    else await migrateToRoutines(sched.length?sched[0].value:null);
     cache(); setSync("synced"); flush();
   }catch(e){ setSync("offline — using cached data",true); }
+  if(!state.routines) state.routines=buildRoutines(null); // offline first paint; server value wins later
   authed = state.pin ? localStorage.getItem(AUTH)===state.pin : false;
   render();
+}
+const thisMondayISO=()=>{ const d=new Date(); d.setDate(d.getDate()-dayIdx(todayISO())); return d.toISOString().slice(0,10); };
+function buildRoutines(oldSchedule){
+  return { active:"power", list:[
+    { id:"gym", name:"Gym 4+1", restNote:GYM_REST_NOTE, days:GYM_DAYS.map(d=>({...d})), rules:GYM_RULES.slice(),
+      schedule: oldSchedule && oldSchedule.cycle ? oldSchedule : {start:todayISO(),cycle:["upperA","lowerB","rest","upperB","lowerA","rest"]} },
+    { id:"power", name:"Power 5-Day", restNote:POWER_REST_NOTE, days:POWER_DAYS.map(d=>({...d})), rules:POWER_RULES.slice(),
+      schedule: {start:thisMondayISO(),cycle:["pwLower","pwPress","rest","pwSprint","pwHinge","pwRepeat","rest"]} },
+  ]};
+}
+/* One-time: wrap the existing program as the "gym" routine and seed the power routine. */
+async function migrateToRoutines(oldSchedule){
+  state.routines=buildRoutines(oldSchedule);
+  const have=new Set(state.program.map(e=>e.id));
+  const fresh=POWER_SEED.filter(e=>!have.has(e.id));
+  if(fresh.length){
+    const rows=fresh.map(({_block,_rest,...row})=>row);
+    await api("/program_exercises",{method:"POST",body:JSON.stringify(rows)});
+    state.program=state.program.concat(rows);
+  }
+  for(const e of POWER_SEED){ if(e._block&&!state.blocks[e.id]) state.blocks[e.id]=e._block;
+    if(e._rest&&!state.rests[e.id]) state.rests[e.id]=e._rest; }
+  await Promise.all([
+    kvSet("routines",state.routines), kvSet("blocks",state.blocks), kvSet("rests",state.rests),
+  ]).catch(()=>{ routinesSave();
+    push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"blocks",value:state.blocks}});
+    push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"rests",value:state.rests}}); });
 }
 
 /* ================= Shell / auth ================= */
@@ -337,23 +500,20 @@ async function submitPin(first){
 
 /* ================= Schedule / calendar ================= */
 const DAYNAMES=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const SHORTSESS={upperA:"UP A",lowerA:"LO A",upperB:"UP B",lowerB:"LO B",skills:"SKILL",rest:"REST"};
-const REST_NOTE="Swim or easy run + stretching / calisthenics";
 const dayIdx=iso=>(new Date(iso+"T12:00").getDay()+6)%7; // 0=Mon
+const schedule=()=>{const r=activeRoutine();return r?r.schedule:null;};
 function plannedFor(iso){ // repeating cycle anchored at schedule.start
-  const sc=state.schedule; if(!sc||!sc.cycle||!sc.cycle.length||!sc.start) return null;
+  const sc=schedule(); if(!sc||!sc.cycle||!sc.cycle.length||!sc.start) return null;
   const d=Math.round((Date.parse(iso)-Date.parse(sc.start))/864e5);
   if(d<0) return null;
   return sc.cycle[d%sc.cycle.length]||null;
 }
-function schedSave(){ cache();
-  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"schedule",value:state.schedule}});
-  render(); }
-function cycleSet(i,v){ state.schedule.cycle[i]=v; schedSave(); }
-function cycleAdd(){ state.schedule.cycle.push("rest"); schedSave(); }
-function cycleDel(i){ state.schedule.cycle.splice(i,1); schedSave(); }
-function cycleStart(v){ state.schedule.start=v; schedSave(); }
-function cycleInit(){ state.schedule={start:todayISO(),cycle:["upperA","lowerB","rest","upperB","lowerA","rest"]}; schedSave(); }
+function schedSave(){ routinesSave(); render(); }
+function cycleSet(i,v){ schedule().cycle[i]=v; schedSave(); }
+function cycleAdd(){ schedule().cycle.push("rest"); schedSave(); }
+function cycleDel(i){ schedule().cycle.splice(i,1); schedSave(); }
+function cycleStart(v){ schedule().start=v; schedSave(); }
+function cycleInit(){ activeRoutine().schedule={start:todayISO(),cycle:dayOrder().concat("rest")}; schedSave(); }
 function weekStrip(day){
   const base=new Date(day+"T12:00"); base.setDate(base.getDate()-dayIdx(day)); // Monday of that week
   let h=`<div class="weekstrip">`;
@@ -364,7 +524,7 @@ function weekStrip(day){
     const cls=["wday",iso===todayISO()?"today":"",done?"done":"",iso===day?"sel":""].join(" ");
     h+=`<button class="${cls}" onclick="logDate='${iso}'===todayISO()?null:'${iso}';render()" ${iso>todayISO()?"disabled":""}>
      <span class="wd">${DAYNAMES[i]}</span><span class="wn num">${dt.getDate()}</span>
-     <span class="wp">${done?"✓":plan?SHORTSESS[plan]||"?":"—"}</span></button>`;
+     <span class="wp">${done?"✓":plan?(plan==="rest"?"REST":dayShort(plan)):"—"}</span></button>`;
   }
   return h+`</div>`;
 }
@@ -376,8 +536,9 @@ function renderToday(){
   const doneToday=new Set(state.logs.filter(l=>l.date===day).map(l=>l.session_key));
   const plan=plannedFor(day);
   let h=weekStrip(day);
-  if(plan==="rest") h+=`<div class="target plain" style="margin:0 0 10px">${isToday?"Today":"That day"} is a <strong>rest day</strong> — ${REST_NOTE}.</div>`;
-  else if(plan&&!doneToday.has(plan)) h+=`<div class="target" style="margin:0 0 10px">${isToday?"Today's plan":"Planned"}: <strong>${SESSIONS[plan]}</strong></div>`;
+  if(plan==="rest") h+=`<div class="target plain" style="margin:0 0 10px">${isToday?"Today":"That day"} is a <strong>rest day</strong> — ${restNote()}.</div>`;
+  else if(plan&&!doneToday.has(plan)) h+=`<div class="target" style="margin:0 0 10px">${isToday?"Today's plan":"Planned"}: <strong>${dayName(plan)}</strong></div>`;
+  h+=routineSwitcher();
   h+=`<div class="row" style="justify-content:space-between;margin-bottom:8px">
    <div class="label">Pick ${isToday?"today's":"the"} session</div>
    <div class="row"><input type="date" id="logDate" value="${day}" max="${todayISO()}"
@@ -385,10 +546,10 @@ function renderToday(){
    ${isToday?"":`<button class="btn ghost small" onclick="logDate=null;render()">Today</button>`}</div></div>
    ${isToday?"":`<div class="small" style="margin-bottom:8px">Logging a past workout for <strong>${fmtDate(day)}</strong>.</div>`}
    <div class="sessgrid">`;
-  for(const key of SESSION_ORDER){
+  for(const key of dayOrder()){
     const last=[...state.logs].filter(l=>l.session_key===key).sort((a,b)=>a.date<b.date?-1:1).slice(-1)[0];
     h+=`<button class="sesscard ${doneToday.has(key)?"done":""} ${plan===key&&!doneToday.has(key)?"planned":""}" onclick="startSession('${key}')">
-     <span class="sname">${SESSIONS[key]}${plan===key?' <span class="tag pr" style="font-size:9px">PLAN</span>':""}</span><span class="smeta">${sessionEx(key).length} exercises</span>
+     <span class="sname">${esc(dayName(key))}${plan===key?' <span class="tag pr" style="font-size:9px">PLAN</span>':""}</span><span class="smeta">${sessionEx(key).length} exercises</span>
      <span class="smeta">${doneToday.has(key)?`<span class="tag good">Done ${isToday?"today":fmtDate(day)}</span>`:last?"Last: "+fmtDate(last.date):"Never logged"}</span></button>`;
   }
   h+=`</div><div class="divider"></div>`;
@@ -420,18 +581,21 @@ function draftExs(){ return state.draft.order.map(exById).filter(Boolean); }
 function renderActive(){
   const d=state.draft;
   let h=`<div class="row" style="justify-content:space-between;margin-bottom:10px">
-   <div><h2 style="margin:0">${SESSIONS[d.session_key]}</h2><div class="small">${SESSION_NOTE[d.session_key]||""}</div>
+   <div><h2 style="margin:0">${esc(dayName(d.session_key))}</h2><div class="small">${esc(dayNote(d.session_key))}</div>
     <input type="date" value="${d.date}" max="${todayISO()}" style="margin-top:4px;max-width:150px"
      onchange="state.draft.date=this.value||todayISO();saveDraft()"></div>
    <div class="row"><button class="btn small ${reorderMode?"primary":""}" onclick="reorderMode=!reorderMode;render()">↕</button>
    <button class="btn ghost small" onclick="discardDraft()">Discard</button></div></div>`;
+  let curBlock=null;
   draftExs().forEach((ex,xi)=>{
     const t=target(ex), sets=d.entries[ex.id]||[];
     const allDone=sets.length&&sets.every(s=>s.done);
+    const blk=blockFor(ex.id);
+    if(blk!==curBlock){ curBlock=blk; if(blk) h+=`<div class="blockhead">${esc(blk)}</div>`; }
     h+=`<div class="excard ${allDone&&!reorderMode?"collapsed":""}" id="exc-${ex.id}">
      <div class="exhead"><div style="min-width:0">
       <div class="exname">${allDone?"✓ ":""}${esc(ex.name)}</div>
-      <div class="exscheme num">${ex.sets}×${ex.rep_lo}–${ex.rep_hi} · ${ex.unit} · rest ${restFor(ex.id)}s${(b=>b?` · 🏆 ${b.w}×${b.r}`:"")(allTimeBest(ex.id))}</div></div>
+      <div class="exscheme num">${scheme(ex)} · ${ex.unit} · rest ${restFor(ex.id)}s${(b=>b?` · 🏆 ${b.w}×${b.r}`:"")(allTimeBest(ex.id))}</div></div>
      <div class="exctl">${reorderMode?
        `<button onclick="moveDraft(${xi},-1)" aria-label="Move up">↑</button>
         <button onclick="moveDraft(${xi},1)" aria-label="Move down">↓</button>
@@ -442,13 +606,13 @@ function renderActive(){
      ${t.tag==="bad"?'<span class="tag bad" style="align-self:center">Deload</span>':""}</div></div>
      <div class="exbody">
      <div class="target ${t.cls}">${t.txt}</div>
-     <div class="sethead"><span>#</span><span>Weight</span><span>${ex.unit==="sec"?"Sec":"Reps"}</span><span>RIR</span><span></span></div>`;
+     <div class="sethead"><span>#</span><span>${loadLabel(ex.unit)}</span><span>${countLabel(ex.unit)}</span><span>RIR</span><span></span></div>`;
     sets.forEach((s,i)=>{
       const g=lastSetGhost(ex.id,i);
       h+=`<div class="setrow ${s.done?"isdone":""}">
        <div class="sn num">${i+1}</div>
        <div class="stepper"><button onclick="step('${ex.id}',${i},'w',-${ex.increment||2.5})">−</button>
-        <input inputmode="decimal" value="${s.w}" placeholder="${g?g.w:"kg"}" oninput="upd('${ex.id}',${i},'w',this.value)">
+        <input inputmode="decimal" value="${s.w}" placeholder="${g?g.w:loadPlaceholder(ex)}" oninput="upd('${ex.id}',${i},'w',this.value)">
         <button onclick="step('${ex.id}',${i},'w',${ex.increment||2.5})">＋</button></div>
        <div class="stepper"><button onclick="step('${ex.id}',${i},'r',-1)">−</button>
         <input inputmode="numeric" value="${s.r}" placeholder="${g?g.r:"0"}" oninput="upd('${ex.id}',${i},'r',this.value)">
@@ -516,6 +680,11 @@ function finishSession(){
 }
 
 /* ================= Add-exercise form (shared) ================= */
+const allBlocks=()=>[...new Set(Object.values(state.blocks).filter(Boolean))].sort();
+const blockDatalist=()=>`<datalist id="blockList">${allBlocks().map(b=>`<option value="${esc(b)}">`).join("")}</datalist>`;
+function lastBlockIn(key){ // default a new exercise into the last block of that day
+  const exs=sessionEx(key); for(let i=exs.length-1;i>=0;i--){const b=blockFor(exs[i].id); if(b)return b;} return "";
+}
 function addExerciseForm(sessionKey,toDraft,swapId){
   const sw=swapId?`'${swapId}'`:"null", verb=swapId?"Swap":"Add";
   const inSession=new Set(toDraft?state.draft.order:sessionEx(sessionKey).map(e=>e.id));
@@ -527,12 +696,15 @@ function addExerciseForm(sessionKey,toDraft,swapId){
      <button class="btn small" onclick="pickExisting(${toDraft},${sw})">${verb}</button></div></div>
     <div class="small" style="text-align:center">— or create new —</div>`:""}
    <div class="fr"><div style="grid-column:1/-1"><label>Name</label><input id="nEx"></div></div>
+   <div class="fr"><div style="grid-column:1/-1"><label>Block (optional)</label>
+    <input id="nBlock" list="blockList" placeholder="e.g. C — Engine" value="${esc(lastBlockIn(sessionKey))}"></div></div>
+   ${blockDatalist()}
    <div class="fr">
     <div><label>Sets</label><input id="nSets" inputmode="numeric" value="3"></div>
     <div><label>Rep lo</label><input id="nLo" inputmode="numeric" value="8"></div>
     <div><label>Rep hi</label><input id="nHi" inputmode="numeric" value="12"></div>
     <div><label>+kg step</label><input id="nInc" inputmode="decimal" value="2.5"></div>
-    <div><label>Unit</label><select id="nUnit"><option>kg</option><option>kg/db</option><option>+kg</option><option>bw</option><option>sec</option></select></div>
+    <div><label>Unit</label><select id="nUnit">${UNITS.map(u=>`<option>${u}</option>`).join("")}</select></div>
     <div><label>Rest s</label><input id="nRest" inputmode="numeric" value="90"></div></div>
    <div class="row"><button class="btn primary small" onclick="createExercise('${sessionKey}',${toDraft},${sw})">Create & ${verb.toLowerCase()}</button>
     <button class="btn ghost small" onclick="addingTo=null;swappingEx=null;render()">Cancel</button></div></div>`;
@@ -544,7 +716,7 @@ function pickExisting(toDraft,swapId){
   else{ const ex=exById(id), key=$("pickEx").dataset.session;
     if(!inSess(ex,key)){ ex.session_key=sessKeys(ex).concat(key).join(","); ex.active=true;
       push({path:"/program_exercises?id=eq."+ex.id,method:"PATCH",body:{session_key:ex.session_key,active:true}});
-      cache(); toast("Added to "+SESSIONS[key]+" — history is shared"); } }
+      cache(); toast("Added to "+dayName(key)+" — history is shared"); } }
   addingTo=null; render();
 }
 function swapDraftEx(oldId,newEx){
@@ -573,6 +745,7 @@ function createExercise(sessionKey,toDraft,swapId){
    sort_order:(Math.max(0,...sessionEx(sessionKey).map(e=>e.sort_order))+10),
    active:!toDraft, is_custom:true };
   const nr=parseInt($("nRest").value); if(nr&&nr!==90) setRest(ex.id,nr);
+  const nb=$("nBlock")?$("nBlock").value.trim():""; if(nb) setBlock(ex.id,nb);
   if(swapId){
     if(!swapDraftEx(swapId,ex))return;
     state.program.push(ex); cache();
@@ -602,8 +775,8 @@ function renderHistory(){
   h+=`<div class="card"><div class="label">Weekly volume — working sets</div>
    <div class="progline"><span><strong>Total (7 days)</strong></span><span class="num"><strong>${cur.tot}</strong>
     <span class="tag ${diff>=0?"good":"bad"}">${diff>=0?"+":""}${diff} vs prev wk</span></span></div>
-   ${SESSION_ORDER.filter(k=>cur.per[k]||prev.per[k]).map(k=>
-    `<div class="progline"><span>${SESSIONS[k]}</span><span class="num">${cur.per[k]||0} <span class="small">(prev ${prev.per[k]||0})</span></span></div>`).join("")}
+   ${[...new Set(dayOrder().concat(Object.keys(cur.per),Object.keys(prev.per)))].filter(k=>cur.per[k]||prev.per[k]).map(k=>
+    `<div class="progline"><span>${esc(dayName(k))}</span><span class="num">${cur.per[k]||0} <span class="small">(prev ${prev.per[k]||0})</span></span></div>`).join("")}
   </div>`;
   const withData=state.program.filter(e=>e.increment>0&&lastLogsFor(e.id,1).length);
   if(withData.length){
@@ -618,7 +791,7 @@ function renderHistory(){
   [...state.logs].sort((a,b)=>a.date<b.date?1:-1).forEach(l=>{
     const nsets=Object.values(l.entries).reduce((a,s)=>a+s.length,0);
     h+=`<button class="histitem" onclick="openLog=openLog===${l.id}?null:${l.id};render()">
-     <div class="hs"><span>${SESSIONS[l.session_key]||l.session_key}</span><span class="num" style="color:var(--muted)">${fmtDate(l.date)}</span></div>
+     <div class="hs"><span>${esc(dayName(l.session_key))}</span><span class="num" style="color:var(--muted)">${fmtDate(l.date)}</span></div>
      <div class="hm num">${Object.keys(l.entries).length} exercises · ${nsets} sets</div>`;
     if(openLog===l.id){
       h+=`<div class="histdetail">`;
@@ -668,28 +841,40 @@ function doExport(){
 
 /* ================= Program ================= */
 function renderProgram(){
+  const r=activeRoutine();
   let h=`<div class="row" style="justify-content:flex-end;margin-bottom:10px">
-   <button class="btn small ${editingProgram?"primary":""}" onclick="editingProgram=!editingProgram;editingEx=null;addingTo=null;render()">${editingProgram?"Done editing":"✎ Edit program"}</button></div>`;
-  for(const key of SESSION_ORDER){
-    const exs=sessionEx(key);
-    h+=`<div class="card"><h2>${SESSIONS[key]}</h2><div class="small" style="margin-bottom:6px">${SESSION_NOTE[key]||""}</div>`;
+   <button class="btn small ${editingProgram?"primary":""}" onclick="editingProgram=!editingProgram;editingEx=null;addingTo=null;editingDay=null;editingRoutine=false;render()">${editingProgram?"Done editing":"✎ Edit program"}</button></div>`;
+  h+=routineSwitcher();
+  if(!r){ $("view").innerHTML=h+`<div class="card small">No routine yet — reconnect to load your program.</div>`; return; }
+  if(editingProgram) h+=routineAdminCard(r);
+  for(const d of r.days){
+    const key=d.key, exs=sessionEx(key);
+    h+=`<div class="card">`;
+    if(editingDay===key){ h+=dayEditForm(d); }
+    else h+=`<h2>${esc(d.name)}</h2><div class="small" style="margin-bottom:6px">${esc(d.note||"")}
+      ${editingProgram?`<button class="btn ghost small" style="margin-left:6px;padding:2px 8px" onclick="editingDay='${key}';render()">✎ day</button>`:""}</div>`;
+    let curBlock=null;
     exs.forEach((ex,i)=>{
+      const blk=blockFor(ex.id);
+      if(blk!==curBlock){ curBlock=blk; if(blk) h+=`<div class="blockhead">${esc(blk)}</div>`; }
       if(editingEx===ex.id){ h+=editExerciseForm(ex); return; }
       h+=`<div class="progline"><span style="min-width:0">${esc(ex.name)}</span>
-       <span class="row" style="flex-shrink:0"><span class="num" style="color:var(--muted)">${ex.sets}×${ex.rep_lo}–${ex.rep_hi}</span>
+       <span class="row" style="flex-shrink:0"><span class="num" style="color:var(--muted)">${scheme(ex)}</span>
        ${editingProgram?`<span class="ordctl">
         <button onclick="moveProg('${key}',${i},-1)" aria-label="Up">↑</button>
         <button onclick="moveProg('${key}',${i},1)" aria-label="Down">↓</button>
         <button onclick="editingEx='${ex.id}';render()" aria-label="Edit">✎</button>
         <button onclick="removeProg('${ex.id}','${key}')" aria-label="Remove" style="color:var(--bad)">✕</button></span>`:""}</span></div>`;
     });
+    if(!exs.length) h+=`<div class="small">No exercises yet.</div>`;
     if(editingProgram){
       h+=`<button class="btn ghost small" style="margin-top:8px" onclick="addingTo=addingTo==='${key}'?null:'${key}';render()">＋ Add exercise</button>`;
       if(addingTo===key)h+=addExerciseForm(key,false);
     }
     h+=`</div>`;
   }
-  const sc=state.schedule;
+  if(editingProgram) h+=`<button class="btn" style="width:100%;margin-bottom:12px" onclick="addDay()">＋ Add training day</button>`;
+  const sc=r.schedule;
   h+=`<div class="card"><h2>Training cycle</h2>`;
   if(sc&&sc.cycle&&sc.cycle.length){
     h+=`<div class="small" style="margin-bottom:6px">Repeats every ${sc.cycle.length} days — the Today calendar follows it.</div>
@@ -697,13 +882,13 @@ function renderProgram(){
      ${sc.cycle.map((k,i)=>`<div class="progline"><span>Day ${i+1}</span>
       <span class="row"><select style="max-width:150px" onchange="cycleSet(${i},this.value)">
        <option value="rest" ${k==="rest"?"selected":""}>Rest day</option>
-       ${SESSION_ORDER.map(s=>`<option value="${s}" ${k===s?"selected":""}>${SESSIONS[s]}</option>`).join("")}
+       ${dayOrder().map(s=>`<option value="${s}" ${k===s?"selected":""}>${esc(dayName(s))}</option>`).join("")}
       </select>${editingProgram?`<button class="btn small" style="color:var(--bad)" onclick="cycleDel(${i})">✕</button>`:""}</span></div>`).join("")}
      ${editingProgram?`<button class="btn ghost small" style="margin-top:8px" onclick="cycleAdd()">＋ Add day</button>`:""}
-     <div class="small" style="margin-top:8px">Rest days: ${REST_NOTE.toLowerCase()}.</div>`;
+     <div class="small" style="margin-top:8px">Rest days: ${esc(restNote().toLowerCase())}.</div>`;
   }else{
-    h+=`<div class="small" style="margin-bottom:8px">No cycle set.</div>
-     <button class="btn small" onclick="cycleInit()">Create default cycle (UP A → LO B → rest → UP B → LO A → rest)</button>`;
+    h+=`<div class="small" style="margin-bottom:8px">No cycle set for ${esc(r.name)}.</div>
+     <button class="btn small" onclick="cycleInit()">Create a cycle from this routine's days</button>`;
   }
   h+=`</div><div class="card"><h2>Nutrition</h2>
    <div class="progline"><span>Calories</span><span class="num"><strong>${NUTRITION.kcal} kcal</strong></span></div>
@@ -711,24 +896,117 @@ function renderProgram(){
    <div class="progline"><span>Fat</span><span class="num">${NUTRITION.fat}</span></div>
    <div class="progline"><span>Carbs</span><span class="num">${NUTRITION.carbs}</span></div>
    <div class="small" style="margin-top:8px">Adjust by weekly weigh-in average: flat 2+ weeks → −150 kcal; dropping >0.7%/week → +100 kcal.</div></div>
-  <div class="card"><h2>Rules</h2><ul class="tight">
-   <li><strong>Progression:</strong> top of rep range on all sets at RIR ≥ 1 → target goes up next session.</li>
-   <li><strong>Stall:</strong> 3 flat sessions → deload 10% and rebuild.</li>
-   <li><strong>Deficit warning:</strong> recovery slips → trim accessories, never main lifts.</li>
-   <li><strong>Ankle (until ~mid-Aug 2026):</strong> flat easy running only; brace/tape for basketball until ~Sep; swimming unrestricted.</li>
-   <li><strong>Calves at home:</strong> 2×15–20 slow single-leg raises on a step, most days.</li></ul></div>
+  ${(r.rules&&r.rules.length)?`<div class="card"><h2>Rules — ${esc(r.name)}</h2>
+   <ul class="tight">${r.rules.map(x=>`<li>${x}</li>`).join("")}</ul></div>`:""}
   <div class="small" style="margin-bottom:20px">Weekly check-in: History → Copy week, paste to Claude.</div>`;
   $("view").innerHTML=h;
 }
+/* ================= Routine + day admin ================= */
+function routineAdminCard(r){
+  if(!editingRoutine) return `<div class="card"><div class="row" style="justify-content:space-between">
+    <div><h2 style="margin:0">${esc(r.name)}</h2><div class="small">${r.days.length} days · ${state.program.filter(e=>e.active&&sessKeys(e).some(k=>r.days.some(d=>d.key===k))).length} exercises</div></div>
+    <button class="btn ghost small" onclick="editingRoutine=true;render()">✎ Routine</button></div></div>`;
+  return `<div class="card"><h2>Routine</h2>
+   <div class="editform">
+    <div><label>Routine name</label><input id="rN" value="${esc(r.name)}"></div>
+    <div><label>Rest-day note</label><input id="rR" value="${esc(r.restNote||"")}"></div>
+    <div class="row"><button class="btn primary small" onclick="saveRoutineMeta()">Save</button>
+     <button class="btn ghost small" onclick="editingRoutine=false;render()">Cancel</button></div></div>
+   <div class="row" style="flex-wrap:wrap;margin-top:8px">
+    <button class="btn ghost small" onclick="addRoutine()">＋ New routine</button>
+    <button class="btn ghost small" onclick="duplicateRoutine()">⧉ Duplicate this one</button>
+    ${routineList().length>1?`<button class="btn ghost small" style="color:var(--bad)" onclick="deleteRoutine()">✕ Delete this one</button>`:""}</div>
+   <div class="small" style="margin-top:8px">Deleting a routine keeps every exercise and all history — it only removes the grouping.</div></div>`;
+}
+function saveRoutineMeta(){
+  const r=activeRoutine();
+  r.name=$("rN").value.trim()||r.name; r.restNote=$("rR").value.trim();
+  editingRoutine=false; routinesSave(); toast("Saved"); render();
+}
+function dayEditForm(d){
+  return `<div class="editform">
+   <div><label>Day name</label><input id="dN" value="${esc(d.name)}"></div>
+   <div class="fr"><div style="grid-column:1/-1"><label>Note</label><input id="dNo" value="${esc(d.note||"")}"></div></div>
+   <div class="fr"><div><label>Short (calendar)</label><input id="dS" maxlength="5" value="${esc(d.short||"")}"></div></div>
+   <div class="row"><button class="btn primary small" onclick="saveDay('${d.key}')">Save</button>
+    <button class="btn ghost small" onclick="editingDay=null;render()">Cancel</button>
+    <button class="btn ghost small" style="color:var(--bad);margin-left:auto" onclick="deleteDay('${d.key}')">✕ Delete day</button></div></div>`;
+}
+function saveDay(key){
+  const d=activeRoutine().days.find(x=>x.key===key); if(!d)return;
+  d.name=$("dN").value.trim()||d.name; d.note=$("dNo").value.trim();
+  d.short=($("dS").value.trim()||d.name.slice(0,5)).toUpperCase();
+  editingDay=null; routinesSave(); toast("Saved"); render();
+}
+function addDay(){
+  const r=activeRoutine(), key="d"+Date.now().toString(36);
+  r.days.push({key,name:"New day",short:"NEW",note:""});
+  editingDay=key; routinesSave(); render();
+}
+function deleteDay(key){
+  const r=activeRoutine(), d=r.days.find(x=>x.key===key);
+  const exs=state.program.filter(e=>inSess(e,key));
+  if(!confirm(`Delete "${d.name}"? Its ${exs.length} exercises leave this day (history is kept).`))return;
+  for(const ex of exs){ const rest=sessKeys(ex).filter(k=>k!==key);
+    if(rest.length){ ex.session_key=rest.join(",");
+      push({path:"/program_exercises?id=eq."+ex.id,method:"PATCH",body:{session_key:ex.session_key}}); }
+    else { ex.active=false;
+      push({path:"/program_exercises?id=eq."+ex.id,method:"PATCH",body:{active:false}}); } }
+  r.days=r.days.filter(x=>x.key!==key);
+  if(r.schedule&&r.schedule.cycle) r.schedule.cycle=r.schedule.cycle.map(k=>k===key?"rest":k);
+  editingDay=null; routinesSave(); render();
+}
+function addRoutine(){
+  const name=prompt("Name the new routine:","New routine"); if(!name)return;
+  const id="r"+Date.now().toString(36);
+  state.routines.list.push({id,name:name.trim(),restNote:"Rest",days:[],rules:[],schedule:{start:todayISO(),cycle:[]}});
+  state.routines.active=id; editingRoutine=false; routinesSave(); render(); window.scrollTo(0,0);
+}
+function duplicateRoutine(){
+  const src=activeRoutine();
+  const name=prompt("Name the copy:",src.name+" copy"); if(!name)return;
+  const stamp=Date.now().toString(36), id="r"+stamp;
+  const days=src.days.map((d,i)=>({...d,key:"d"+stamp+i}));
+  const rows=[], nb={}, nr={};
+  src.days.forEach((d,i)=>{
+    for(const ex of sessionEx(d.key)){
+      const nid=(ex.id+"-"+stamp+i).slice(0,60);
+      rows.push({id:nid,session_key:days[i].key,name:ex.name,sets:ex.sets,rep_lo:ex.rep_lo,rep_hi:ex.rep_hi,
+        increment:ex.increment,unit:ex.unit,sort_order:ex.sort_order,active:true,is_custom:true});
+      if(blockFor(ex.id)) nb[nid]=blockFor(ex.id);
+      if(state.rests[ex.id]) nr[nid]=state.rests[ex.id];
+    }
+  });
+  const keyMap=Object.fromEntries(src.days.map((d,i)=>[d.key,days[i].key]));
+  state.program=state.program.concat(rows);
+  if(rows.length) push({path:"/program_exercises",method:"POST",body:rows});
+  Object.assign(state.blocks,nb); Object.assign(state.rests,nr);
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"blocks",value:state.blocks}});
+  push({path:"/kv?on_conflict=key",method:"POST",prefer:"resolution=merge-duplicates",body:{key:"rests",value:state.rests}});
+  state.routines.list.push({id,name:name.trim(),restNote:src.restNote,days,rules:(src.rules||[]).slice(),
+    schedule:{start:todayISO(),cycle:((src.schedule&&src.schedule.cycle)||[]).map(k=>keyMap[k]||k)}});
+  state.routines.active=id; editingRoutine=false; routinesSave(); toast("Copied — edit freely, the original is untouched"); render(); window.scrollTo(0,0);
+}
+function deleteRoutine(){
+  const r=activeRoutine();
+  if(routineList().length<2){toast("Keep at least one routine");return;}
+  if(!confirm(`Delete the routine "${r.name}"? Exercises and history are kept — only the grouping goes.`))return;
+  state.routines.list=state.routines.list.filter(x=>x.id!==r.id);
+  state.routines.active=state.routines.list[0].id;
+  editingRoutine=false; routinesSave(); render();
+}
+
 function editExerciseForm(ex){
   return `<div class="editform">
    <div><label>Name</label><input id="eN" value="${esc(ex.name)}"></div>
+   <div><label>Block (optional)</label><input id="eB" list="blockList" placeholder="e.g. C — Engine" value="${esc(blockFor(ex.id))}"></div>
+   ${blockDatalist()}
    <div class="fr">
     <div><label>Sets</label><input id="eS" inputmode="numeric" value="${ex.sets}"></div>
     <div><label>Rep lo</label><input id="eL" inputmode="numeric" value="${ex.rep_lo}"></div>
     <div><label>Rep hi</label><input id="eH" inputmode="numeric" value="${ex.rep_hi}"></div>
     <div><label>+kg step</label><input id="eI" inputmode="decimal" value="${ex.increment}"></div>
-    <div><label>Unit</label><select id="eU">${["kg","kg/db","+kg","bw","sec","done"].map(u=>`<option ${ex.unit===u?"selected":""}>${u}</option>`).join("")}</select></div>
+    <div><label>Unit</label><select id="eU">${UNITS.map(u=>`<option ${ex.unit===u?"selected":""}>${u}</option>`).join("")}</select></div>
     <div><label>Rest s</label><input id="eR" inputmode="numeric" value="${restFor(ex.id)}"></div></div>
    <div class="row"><button class="btn primary small" onclick="saveExercise('${ex.id}')">Save</button>
     <button class="btn ghost small" onclick="editingEx=null;render()">Cancel</button></div></div>`;
@@ -739,6 +1017,7 @@ function saveExercise(id){
   ex.rep_lo=parseInt($("eL").value)||ex.rep_lo; ex.rep_hi=parseInt($("eH").value)||ex.rep_hi;
   ex.increment=parseFloat($("eI").value)||0; ex.unit=$("eU").value;
   const er=parseInt($("eR").value); if(er&&er!==restFor(id)) setRest(id,er);
+  const eb=$("eB").value.trim(); if(eb!==blockFor(id)) setBlock(id,eb);
   cache(); push({path:"/program_exercises?id=eq."+id,method:"PATCH",
    body:{name:ex.name,sets:ex.sets,rep_lo:ex.rep_lo,rep_hi:ex.rep_hi,increment:ex.increment,unit:ex.unit}});
   editingEx=null; toast("Saved"); render();
@@ -754,7 +1033,7 @@ function moveProg(key,i,dir){
 function removeProg(id,key){
   const ex=exById(id), keys=sessKeys(ex);
   if(keys.length>1){
-    if(!confirm("Remove \""+ex.name+"\" from "+SESSIONS[key]+"? It stays in "+keys.filter(k=>k!==key).map(k=>SESSIONS[k]).join(", ")+"."))return;
+    if(!confirm("Remove \""+ex.name+"\" from "+dayName(key)+"? It stays in "+keys.filter(k=>k!==key).map(dayName).join(", ")+"."))return;
     ex.session_key=keys.filter(k=>k!==key).join(",");
     push({path:"/program_exercises?id=eq."+id,method:"PATCH",body:{session_key:ex.session_key}});
   }else{
